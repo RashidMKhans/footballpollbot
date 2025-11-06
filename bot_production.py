@@ -142,7 +142,7 @@ def main() -> None:
 
     # Регистрация обработчиков команд
     application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CommandHandler("test_poll", test_poll_command))
+    application.add_handler(CommandHandler("dop_tep_poll", test_poll_command))
     application.add_handler(CommandHandler("get_chat_id", get_chat_id_command))
 
     # Запуск бота
