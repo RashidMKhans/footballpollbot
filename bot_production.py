@@ -7,10 +7,8 @@ PRODUCTION VERSION - использует webhook для бесплатного 
 
 import os
 import logging
-import asyncio
 from datetime import time
 from zoneinfo import ZoneInfo
-from flask import Flask, request
 
 from telegram import Update, BotCommand
 from telegram.ext import (
@@ -32,12 +30,6 @@ CHAT_ID = os.getenv('CHAT_ID')
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 PORT = int(os.getenv('PORT', 10000))
 TIMEZONE = ZoneInfo('Asia/Almaty')  # UTC+5
-
-# Flask приложение
-app = Flask(__name__)
-
-# Глобальная переменная для Application
-application = None
 
 
 async def send_poll(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -130,11 +122,6 @@ async def post_init(application: Application) -> None:
     await application.bot.set_my_commands(commands)
     logger.info("✅ Команды бота установлены")
 
-    # Устанавливаем webhook
-    webhook_url = f"{WEBHOOK_URL}/telegram"
-    await application.bot.set_webhook(url=webhook_url)
-    logger.info(f"✅ Webhook установлен: {webhook_url}")
-
     # Добавляем задачу: каждую среду в 11:00
     job_queue = application.job_queue
     job_queue.run_daily(
@@ -147,32 +134,12 @@ async def post_init(application: Application) -> None:
     logger.info("✅ Расписание настроено: опросы будут отправляться каждую среду в 11:00 (UTC+5)")
 
 
-# Flask routes
-@app.route('/')
-def index():
-    """Health check endpoint"""
-    return "🏃‍♂️ DopTep Poll Bot is running! ⚽", 200
-
-
-@app.route('/telegram', methods=['POST'])
-def webhook():
-    """Webhook endpoint для Telegram"""
-    try:
-        update = Update.de_json(request.get_json(force=True), application.bot)
-        asyncio.run(application.process_update(update))
-        return "ok", 200
-    except Exception as e:
-        logger.error(f"Ошибка обработки webhook: {e}")
-        return "error", 500
-
-
-def init_bot():
-    """Инициализация бота"""
-    global application
+def main() -> None:
+    """Главная функция запуска бота"""
 
     if not BOT_TOKEN:
         logger.error("❌ BOT_TOKEN не установлен!")
-        return None
+        return
 
     if not CHAT_ID:
         logger.warning("⚠️ CHAT_ID не установлен")
@@ -192,19 +159,20 @@ def init_bot():
     application.add_handler(CommandHandler("get_chat_id", get_chat_id_command))
     application.add_handler(CommandHandler("stop", stop_command))
 
-    logger.info("🚀 Бот инициализирован!")
-    return application
+    # Запуск бота в режиме webhook
+    logger.info("🚀 Бот запущен в режиме webhook!")
+    logger.info(f"🌐 Webhook URL: {WEBHOOK_URL}")
+    logger.info(f"🌐 Порт: {PORT}")
 
+    # Используем встроенный webhook сервер
+    application.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        url_path="telegram",
+        webhook_url=f"{WEBHOOK_URL}/telegram",
+        drop_pending_updates=True,
+    )
 
-# Инициализация при импорте модуля
-application = init_bot()
 
 if __name__ == '__main__':
-    if application:
-        # Запускаем инициализацию бота
-        asyncio.run(application.initialize())
-        asyncio.run(application.start())
-
-        # Запускаем Flask сервер
-        logger.info(f"🌐 Запуск веб-сервера на порту {PORT}")
-        app.run(host='0.0.0.0', port=PORT)
+    main()
