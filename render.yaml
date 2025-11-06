@@ -1,5 +1,5 @@
 services:
-  - type: worker
+  - type: web
     name: doptep-poll-bot
     env: python
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
@@ -8,4 +8,6 @@ services:
       - key: BOT_TOKEN
         sync: false
       - key: CHAT_ID
+        sync: false
+      - key: WEBHOOK_URL
         sync: false

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Telegram Bot для автоматической отправки опросов каждую среду в 11:00 (UTC+5)
-PRODUCTION VERSION - использует переменные окружения
+PRODUCTION VERSION - использует webhook для бесплатного хостинга на Render
 """
 
 import os
@@ -10,7 +10,7 @@ import logging
 from datetime import time
 from zoneinfo import ZoneInfo
 
-from telegram import Update, Bot, BotCommand
+from telegram import Update, BotCommand
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -24,9 +24,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Конфигурация из переменных окружения (для деплоя)
+# Конфигурация из переменных окружения
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-CHAT_ID = os.getenv('CHAT_ID')  # ID группы, куда отправлять опрос
+CHAT_ID = os.getenv('CHAT_ID')
+WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # Например: https://your-app.onrender.com
+PORT = int(os.getenv('PORT', 10000))
 TIMEZONE = ZoneInfo('Asia/Almaty')  # UTC+5 (Алматы/Астана)
 
 
@@ -44,8 +46,8 @@ async def send_poll(context: ContextTypes.DEFAULT_TYPE) -> None:
             chat_id=CHAT_ID,
             question=question,
             options=options,
-            is_anonymous=False,  # Неанонимный опрос
-            allows_multiple_answers=False,  # Только один ответ
+            is_anonymous=False,
+            allows_multiple_answers=False,
         )
 
         logger.info(f"Опрос успешно отправлен в группу {CHAT_ID}")
@@ -68,7 +70,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def test_poll_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Команда для тестовой отправки опроса (только для админа)"""
+    """Команда для тестовой отправки опроса"""
     try:
         question = "🏃‍♂️Жұма 20:30 футбол ниш"
         options = ["✅ Келем буйыртса", "❌ Келе алмайм"]
@@ -104,14 +106,11 @@ async def get_chat_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Команда для остановки бота"""
-    await update.message.reply_text("🛑 Останавливаю бот...")
-    logger.info(f"Бот остановлен пользователем {update.effective_user.id}")
-
-    # Останавливаем приложение
-    application = context.application
-    await application.stop()
-    await application.shutdown()
+    """Команда для остановки бота (только для локальной версии)"""
+    await update.message.reply_text(
+        "⚠️ Команда /stop недоступна на production сервере.\n"
+        "Для остановки бота используйте панель управления хостингом."
+    )
 
 
 async def post_init(application: Application) -> None:
@@ -124,14 +123,12 @@ async def post_init(application: Application) -> None:
         BotCommand("start_dop_tep", "Информация о боте"),
         BotCommand("dop_tep_poll", "Отправить опрос"),
         BotCommand("get_chat_id", "Получить ID текущего чата"),
-        BotCommand("stop", "Остановить бот"),
     ]
     await application.bot.set_my_commands(commands)
     logger.info("✅ Команды бота установлены")
 
-    job_queue = application.job_queue
-
     # Добавляем задачу: каждую среду в 11:00 по времени Алматы (UTC+5)
+    job_queue = application.job_queue
     job_queue.run_daily(
         send_poll,
         time=time(hour=11, minute=0, second=0, tzinfo=TIMEZONE),
@@ -151,7 +148,10 @@ def main() -> None:
         return
 
     if not CHAT_ID:
-        logger.warning("⚠️ Предупреждение: CHAT_ID не установлен. Используй команду /get_chat_id в группе для получения ID")
+        logger.warning("⚠️ Предупреждение: CHAT_ID не установлен")
+
+    if not WEBHOOK_URL:
+        logger.warning("⚠️ Предупреждение: WEBHOOK_URL не установлен")
 
     # Создание приложения
     application = (
@@ -167,9 +167,17 @@ def main() -> None:
     application.add_handler(CommandHandler("get_chat_id", get_chat_id_command))
     application.add_handler(CommandHandler("stop", stop_command))
 
-    # Запуск бота
-    logger.info("🚀 Бот запущен!")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Запуск бота в режиме webhook
+    logger.info("🚀 Бот запущен в режиме webhook!")
+    logger.info(f"🌐 Webhook URL: {WEBHOOK_URL}/telegram")
+    logger.info(f"🌐 Порт: {PORT}")
+
+    application.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        url_path="telegram",
+        webhook_url=f"{WEBHOOK_URL}/telegram"
+    )
 
 
 if __name__ == '__main__':
