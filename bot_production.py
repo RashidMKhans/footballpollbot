@@ -7,8 +7,10 @@ PRODUCTION VERSION - использует webhook для бесплатного 
 
 import os
 import logging
+import asyncio
 from datetime import time
 from zoneinfo import ZoneInfo
+from flask import Flask, request
 
 from telegram import Update, BotCommand
 from telegram.ext import (
@@ -27,9 +29,15 @@ logger = logging.getLogger(__name__)
 # Конфигурация из переменных окружения
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 CHAT_ID = os.getenv('CHAT_ID')
-WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # Например: https://your-app.onrender.com
+WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 PORT = int(os.getenv('PORT', 10000))
-TIMEZONE = ZoneInfo('Asia/Almaty')  # UTC+5 (Алматы/Астана)
+TIMEZONE = ZoneInfo('Asia/Almaty')  # UTC+5
+
+# Flask приложение
+app = Flask(__name__)
+
+# Глобальная переменная для Application
+application = None
 
 
 async def send_poll(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -41,7 +49,6 @@ async def send_poll(context: ContextTypes.DEFAULT_TYPE) -> None:
         question = "🏃‍♂️Жұма 20:30 футбол НИШ"
         options = ["✅ Келемін буйыртса", "❌ Келе алмаймын"]
 
-        # Отправка неанонимного опроса
         await context.bot.send_poll(
             chat_id=CHAT_ID,
             question=question,
@@ -103,7 +110,7 @@ async def get_chat_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Команда для остановки бота (только для локальной версии)"""
+    """Команда для остановки бота"""
     await update.message.reply_text(
         "⚠️ Команда /stop недоступна на production сервере.\n"
         "Для остановки бота используйте панель управления хостингом."
@@ -113,43 +120,65 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def post_init(application: Application) -> None:
     """
     Инициализация после запуска бота.
-    Настраивает расписание для отправки опросов.
     """
-    # Устанавливаем команды бота для отображения в меню Telegram
+    # Устанавливаем команды бота
     commands = [
         BotCommand("start_dop_tep", "Бот туралы ақпарат"),
         BotCommand("dop_tep_poll", "қасқырлар сауалнамасын жасау"),
-        BotCommand("stop", "Сау бол"),
-        # BotCommand("get_chat_id", "Получить ID текущего чата"),
+        BotCommand("get_chat_id", "Получить ID чата"),
     ]
     await application.bot.set_my_commands(commands)
     logger.info("✅ Команды бота установлены")
 
-    # Добавляем задачу: каждую среду в 11:00 по времени Алматы (UTC+5)
+    # Устанавливаем webhook
+    webhook_url = f"{WEBHOOK_URL}/telegram"
+    await application.bot.set_webhook(url=webhook_url)
+    logger.info(f"✅ Webhook установлен: {webhook_url}")
+
+    # Добавляем задачу: каждую среду в 11:00
     job_queue = application.job_queue
     job_queue.run_daily(
         send_poll,
         time=time(hour=11, minute=0, second=0, tzinfo=TIMEZONE),
-        days=(2,),  # 2 = среда (0=понедельник, 1=вторник, 2=среда, ...)
+        days=(2,),  # среда
         name='weekly_poll'
     )
 
     logger.info("✅ Расписание настроено: опросы будут отправляться каждую среду в 11:00 (UTC+5)")
 
 
-def main() -> None:
-    """Главная функция запуска бота"""
+# Flask routes
+@app.route('/')
+def index():
+    """Health check endpoint"""
+    return "🏃‍♂️ DopTep Poll Bot is running! ⚽", 200
 
-    # Проверка наличия токена
+
+@app.route('/telegram', methods=['POST'])
+def webhook():
+    """Webhook endpoint для Telegram"""
+    try:
+        update = Update.de_json(request.get_json(force=True), application.bot)
+        asyncio.run(application.process_update(update))
+        return "ok", 200
+    except Exception as e:
+        logger.error(f"Ошибка обработки webhook: {e}")
+        return "error", 500
+
+
+def init_bot():
+    """Инициализация бота"""
+    global application
+
     if not BOT_TOKEN:
-        logger.error("❌ Ошибка: BOT_TOKEN не установлен в переменных окружения!")
-        return
+        logger.error("❌ BOT_TOKEN не установлен!")
+        return None
 
     if not CHAT_ID:
-        logger.warning("⚠️ Предупреждение: CHAT_ID не установлен")
+        logger.warning("⚠️ CHAT_ID не установлен")
 
     if not WEBHOOK_URL:
-        logger.warning("⚠️ Предупреждение: WEBHOOK_URL не установлен")
+        logger.warning("⚠️ WEBHOOK_URL не установлен")
 
     # Создание приложения
     builder = Application.builder()
@@ -157,24 +186,25 @@ def main() -> None:
     builder.post_init(post_init)
     application = builder.build()
 
-    # Регистрация обработчиков команд
+    # Регистрация обработчиков
     application.add_handler(CommandHandler("start_dop_tep", start_command))
     application.add_handler(CommandHandler("dop_tep_poll", test_poll_command))
     application.add_handler(CommandHandler("get_chat_id", get_chat_id_command))
     application.add_handler(CommandHandler("stop", stop_command))
 
-    # Запуск бота в режиме webhook
-    logger.info("🚀 Бот запущен в режиме webhook!")
-    logger.info(f"🌐 Webhook URL: {WEBHOOK_URL}/telegram")
-    logger.info(f"🌐 Порт: {PORT}")
+    logger.info("🚀 Бот инициализирован!")
+    return application
 
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path="telegram",
-        webhook_url=f"{WEBHOOK_URL}/telegram"
-    )
 
+# Инициализация при импорте модуля
+application = init_bot()
 
 if __name__ == '__main__':
-    main()
+    if application:
+        # Запускаем инициализацию бота
+        asyncio.run(application.initialize())
+        asyncio.run(application.start())
+
+        # Запускаем Flask сервер
+        logger.info(f"🌐 Запуск веб-сервера на порту {PORT}")
+        app.run(host='0.0.0.0', port=PORT)
