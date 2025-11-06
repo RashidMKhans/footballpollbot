@@ -154,12 +154,10 @@ def main() -> None:
         logger.warning("⚠️ Предупреждение: WEBHOOK_URL не установлен")
 
     # Создание приложения
-    application = (
-        Application.builder()
-        .token(BOT_TOKEN)
-        .post_init(post_init)
-        .build()
-    )
+    builder = Application.builder()
+    builder.token(BOT_TOKEN)
+    builder.post_init(post_init)
+    application = builder.build()
 
     # Регистрация обработчиков команд
     application.add_handler(CommandHandler("start_dop_tep", start_command))
