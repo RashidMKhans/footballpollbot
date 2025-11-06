@@ -125,7 +125,7 @@ async def post_init(application: Application) -> None:
         BotCommand("get_chat_id", "Получить ID текущего чата"),
     ]
     await application.bot.set_my_commands(commands)
-    logger.info("✅ Команды бота установлены")
+    logger.info("✅ Команды бота установлены ")
 
     # Добавляем задачу: каждую среду в 11:00 по времени Алматы (UTC+5)
     job_queue = application.job_queue
