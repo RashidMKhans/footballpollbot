@@ -10,7 +10,7 @@ import logging
 from datetime import time
 from zoneinfo import ZoneInfo
 
-from telegram import Update, Bot
+from telegram import Update, Bot, BotCommand
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -103,11 +103,32 @@ async def get_chat_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
 
+async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Команда для остановки бота"""
+    await update.message.reply_text("🛑 Останавливаю бот...")
+    logger.info(f"Бот остановлен пользователем {update.effective_user.id}")
+
+    # Останавливаем приложение
+    application = context.application
+    await application.stop()
+    await application.shutdown()
+
+
 async def post_init(application: Application) -> None:
     """
     Инициализация после запуска бота.
     Настраивает расписание для отправки опросов.
     """
+    # Устанавливаем команды бота для отображения в меню Telegram
+    commands = [
+        BotCommand("start_dop_tep", "Информация о боте"),
+        BotCommand("dop_tep_poll", "Отправить опрос"),
+        BotCommand("get_chat_id", "Получить ID текущего чата"),
+        BotCommand("stop", "Остановить бот"),
+    ]
+    await application.bot.set_my_commands(commands)
+    logger.info("✅ Команды бота установлены")
+
     job_queue = application.job_queue
 
     # Добавляем задачу: каждую среду в 11:00 по времени Алматы (UTC+5)
@@ -141,9 +162,10 @@ def main() -> None:
     )
 
     # Регистрация обработчиков команд
-    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("start_dop_tep", start_command))
     application.add_handler(CommandHandler("dop_tep_poll", test_poll_command))
     application.add_handler(CommandHandler("get_chat_id", get_chat_id_command))
+    application.add_handler(CommandHandler("stop", stop_command))
 
     # Запуск бота
     logger.info("🚀 Бот запущен!")
