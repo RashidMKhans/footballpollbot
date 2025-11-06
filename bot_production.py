@@ -25,8 +25,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Конфигурация из переменных окружения (для деплоя)
-BOT_TOKEN = os.getenv('BOT_TOKEN')
-CHAT_ID = os.getenv('CHAT_ID')  # ID группы, куда отправлять опрос
+BOT_TOKEN = os.getenv('8351081330:AAFpcSBjJR7EGQ16XbgE1n1qJYX0FtaSjEY')
+CHAT_ID = os.getenv('-1003224910017')  # ID группы, куда отправлять опрос
 TIMEZONE = ZoneInfo('Asia/Almaty')  # UTC+5 (Алматы/Астана)
 
 
