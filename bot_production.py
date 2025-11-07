@@ -41,6 +41,7 @@ async def send_poll(context: ContextTypes.DEFAULT_TYPE) -> None:
         question = "🏃‍♂️Жұма 20:30 футбол НИШ"
         options = ["✅ Келемін буйыртса", "❌ Келе алмаймын"]
 
+        # Отправка опроса
         await context.bot.send_poll(
             chat_id=CHAT_ID,
             question=question,
@@ -49,7 +50,35 @@ async def send_poll(context: ContextTypes.DEFAULT_TYPE) -> None:
             allows_multiple_answers=False,
         )
 
-        logger.info(f"Опрос успешно отправлен в группу {CHAT_ID}")
+        # Отправка списка игроков
+        player_list = """Жұма 20:30 футбол НИШ
+FC
+1.
+2.
+3.
+4.
+5.
+
+FC
+6.
+7.
+8.
+9.
+10.
+
+FC
+11.
+12.
+13.
+14.
+15."""
+
+        await context.bot.send_message(
+            chat_id=CHAT_ID,
+            text=player_list
+        )
+
+        logger.info(f"Опрос и список игроков отправлены в группу {CHAT_ID}")
 
     except Exception as e:
         logger.error(f"Ошибка при отправке опроса: {e}")
@@ -71,6 +100,7 @@ async def test_poll_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         question = "🏃‍♂️Жұма 20:30 футбол НИШ"
         options = ["✅ Келемін буйыртса", "❌ Келе алмаймын"]
 
+        # Отправка опроса
         await update.message.reply_poll(
             question=question,
             options=options,
@@ -78,7 +108,32 @@ async def test_poll_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             allows_multiple_answers=False,
         )
 
-        logger.info(f"Тестовый опрос отправлен пользователем {update.effective_user.id}")
+        # Отправка списка игроков
+        player_list = """Жұма 20:30 футбол НИШ
+FC
+1.
+2.
+3.
+4.
+5.
+
+FC
+6.
+7.
+8.
+9.
+10.
+
+FC
+11.
+12.
+13.
+14.
+15."""
+
+        await update.message.reply_text(player_list)
+
+        logger.info(f"Тестовый опрос и список игроков отправлены пользователем {update.effective_user.id}")
 
     except Exception as e:
         logger.error(f"Ошибка при отправке тестового опроса: {e}")
