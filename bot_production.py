@@ -52,6 +52,7 @@ async def send_poll(context: ContextTypes.DEFAULT_TYPE) -> None:
 
         # Отправка списка игроков
         player_list = """Жұма 20:30 футбол НИШ
+        
 FC
 1.
 2.
@@ -110,6 +111,7 @@ async def test_poll_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
         # Отправка списка игроков
         player_list = """Жұма 20:30 футбол НИШ
+        
 FC
 1.
 2.
