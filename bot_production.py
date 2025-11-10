@@ -8,6 +8,7 @@ PRODUCTION VERSION - использует webhook для бесплатного 
 import os
 import logging
 import asyncio
+import threading
 from datetime import time
 from zoneinfo import ZoneInfo
 from flask import Flask, request
@@ -36,8 +37,9 @@ TIMEZONE = ZoneInfo('Asia/Almaty')  # UTC+5
 # Flask приложение
 app = Flask(__name__)
 
-# Глобальная переменная для Application
+# Глобальные переменные
 bot_application = None
+bot_loop = None
 
 
 async def send_poll(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -215,11 +217,15 @@ def health():
 @app.route('/telegram', methods=['POST'])
 def webhook():
     """Webhook endpoint для Telegram"""
-    global bot_application
+    global bot_application, bot_loop
     try:
-        if bot_application:
+        if bot_application and bot_loop:
             update = Update.de_json(request.get_json(force=True), bot_application.bot)
-            asyncio.run(bot_application.process_update(update))
+            # Запускаем обработку update в существующем event loop бота
+            asyncio.run_coroutine_threadsafe(
+                bot_application.process_update(update),
+                bot_loop
+            )
         return "ok", 200
     except Exception as e:
         logger.error(f"Ошибка обработки webhook: {e}")
@@ -228,7 +234,7 @@ def webhook():
 
 async def init_bot():
     """Инициализация бота"""
-    global bot_application
+    global bot_application, bot_loop
 
     if not BOT_TOKEN:
         logger.error("❌ BOT_TOKEN не установлен!")
@@ -266,15 +272,42 @@ async def init_bot():
     logger.info(f"🏥 Root endpoint: {WEBHOOK_URL}/")
 
 
+async def run_bot_loop():
+    """Запуск event loop бота"""
+    global bot_loop
+
+    # Сохраняем текущий event loop
+    bot_loop = asyncio.get_event_loop()
+
+    # Инициализируем бота
+    await init_bot()
+
+    # Держим event loop активным навсегда
+    try:
+        while True:
+            await asyncio.sleep(1)
+    except KeyboardInterrupt:
+        logger.info("Остановка бота...")
+        if bot_application:
+            await bot_application.stop()
+            await bot_application.shutdown()
+
+
+def run_flask():
+    """Запуск Flask сервера в отдельном потоке"""
+    logger.info(f"🌐 Запуск веб-сервера на порту {PORT}")
+    app.run(host='0.0.0.0', port=PORT, use_reloader=False)
+
+
 def main() -> None:
     """Главная функция запуска бота"""
 
-    # Инициализируем бота асинхронно
-    asyncio.run(init_bot())
+    # Запускаем Flask в отдельном потоке
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
 
-    # Запускаем Flask сервер
-    logger.info(f"🌐 Запуск веб-сервера на порту {PORT}")
-    app.run(host='0.0.0.0', port=PORT)
+    # Запускаем бота в основном потоке (с его event loop)
+    asyncio.run(run_bot_loop())
 
 
 if __name__ == '__main__':
