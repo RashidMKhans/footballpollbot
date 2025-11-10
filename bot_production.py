@@ -7,8 +7,10 @@ PRODUCTION VERSION - использует webhook для бесплатного 
 
 import os
 import logging
+import asyncio
 from datetime import time
 from zoneinfo import ZoneInfo
+from flask import Flask, request
 
 from telegram import Update, BotCommand
 from telegram.ext import (
@@ -16,7 +18,6 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
 )
-from tornado.web import RequestHandler, Application as TornadoApp
 
 # Настройка логирования
 logging.basicConfig(
@@ -32,19 +33,11 @@ WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 PORT = int(os.getenv('PORT', 10000))
 TIMEZONE = ZoneInfo('Asia/Almaty')  # UTC+5
 
+# Flask приложение
+app = Flask(__name__)
 
-class HealthCheckHandler(RequestHandler):
-    """Handler для health check endpoint"""
-    def get(self):
-        self.write("OK")
-        self.set_status(200)
-
-
-class RootHandler(RequestHandler):
-    """Handler для корневого пути"""
-    def get(self):
-        self.write("DopTep Poll Bot is running!")
-        self.set_status(200)
+# Глобальная переменная для Application
+bot_application = None
 
 
 async def send_poll(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -206,8 +199,36 @@ async def post_init(application: Application) -> None:
     logger.info("✅ Расписание настроено: опросы будут отправляться каждую среду в 11:00 (UTC+5)")
 
 
-def main() -> None:
-    """Главная функция запуска бота"""
+# Flask routes
+@app.route('/')
+def index():
+    """Root endpoint для проверки работоспособности"""
+    return "🏃‍♂️ DopTep Poll Bot is running! ⚽", 200
+
+
+@app.route('/health')
+def health():
+    """Health check endpoint"""
+    return "OK", 200
+
+
+@app.route('/telegram', methods=['POST'])
+def webhook():
+    """Webhook endpoint для Telegram"""
+    global bot_application
+    try:
+        if bot_application:
+            update = Update.de_json(request.get_json(force=True), bot_application.bot)
+            asyncio.run(bot_application.process_update(update))
+        return "ok", 200
+    except Exception as e:
+        logger.error(f"Ошибка обработки webhook: {e}")
+        return "error", 500
+
+
+async def init_bot():
+    """Инициализация бота"""
+    global bot_application
 
     if not BOT_TOKEN:
         logger.error("❌ BOT_TOKEN не установлен!")
@@ -223,36 +244,37 @@ def main() -> None:
     builder = Application.builder()
     builder.token(BOT_TOKEN)
     builder.post_init(post_init)
-    application = builder.build()
+    bot_application = builder.build()
 
     # Регистрация обработчиков
-    application.add_handler(CommandHandler("start_dop_tep", start_command))
-    application.add_handler(CommandHandler("dop_tep_poll", test_poll_command))
-    application.add_handler(CommandHandler("get_chat_id", get_chat_id_command))
-    application.add_handler(CommandHandler("stop", stop_command))
+    bot_application.add_handler(CommandHandler("start_dop_tep", start_command))
+    bot_application.add_handler(CommandHandler("dop_tep_poll", test_poll_command))
+    bot_application.add_handler(CommandHandler("get_chat_id", get_chat_id_command))
+    bot_application.add_handler(CommandHandler("stop", stop_command))
 
-    # Запуск бота в режиме webhook
-    logger.info("🚀 Бот запущен в режиме webhook!")
-    logger.info(f"🌐 Webhook URL: {WEBHOOK_URL}")
-    logger.info(f"🌐 Порт: {PORT}")
+    # Инициализация и запуск
+    await bot_application.initialize()
+    await bot_application.start()
+
+    # Установка webhook
+    webhook_url = f"{WEBHOOK_URL}/telegram"
+    await bot_application.bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+
+    logger.info("🚀 Бот инициализирован и webhook установлен!")
+    logger.info(f"🌐 Webhook URL: {webhook_url}")
     logger.info(f"🏥 Health check: {WEBHOOK_URL}/health")
     logger.info(f"🏥 Root endpoint: {WEBHOOK_URL}/")
 
-    # Создаем кастомное Tornado приложение с health check endpoints
-    tornado_app = TornadoApp([
-        (r"/health", HealthCheckHandler),
-        (r"/", RootHandler),
-    ])
 
-    # Используем встроенный webhook сервер с кастомным Tornado app
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path="telegram",
-        webhook_url=f"{WEBHOOK_URL}/telegram",
-        drop_pending_updates=True,
-        webhook_app=tornado_app,
-    )
+def main() -> None:
+    """Главная функция запуска бота"""
+
+    # Инициализируем бота асинхронно
+    asyncio.run(init_bot())
+
+    # Запускаем Flask сервер
+    logger.info(f"🌐 Запуск веб-сервера на порту {PORT}")
+    app.run(host='0.0.0.0', port=PORT)
 
 
 if __name__ == '__main__':
