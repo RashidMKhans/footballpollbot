@@ -16,6 +16,7 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
 )
+from tornado.web import RequestHandler, Application as TornadoApp
 
 # Настройка логирования
 logging.basicConfig(
@@ -30,6 +31,20 @@ CHAT_ID = os.getenv('CHAT_ID')
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 PORT = int(os.getenv('PORT', 10000))
 TIMEZONE = ZoneInfo('Asia/Almaty')  # UTC+5
+
+
+class HealthCheckHandler(RequestHandler):
+    """Handler для health check endpoint"""
+    def get(self):
+        self.write("OK")
+        self.set_status(200)
+
+
+class RootHandler(RequestHandler):
+    """Handler для корневого пути"""
+    def get(self):
+        self.write("DopTep Poll Bot is running!")
+        self.set_status(200)
 
 
 async def send_poll(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -220,14 +235,23 @@ def main() -> None:
     logger.info("🚀 Бот запущен в режиме webhook!")
     logger.info(f"🌐 Webhook URL: {WEBHOOK_URL}")
     logger.info(f"🌐 Порт: {PORT}")
+    logger.info(f"🏥 Health check: {WEBHOOK_URL}/health")
+    logger.info(f"🏥 Root endpoint: {WEBHOOK_URL}/")
 
-    # Используем встроенный webhook сервер
+    # Создаем кастомное Tornado приложение с health check endpoints
+    tornado_app = TornadoApp([
+        (r"/health", HealthCheckHandler),
+        (r"/", RootHandler),
+    ])
+
+    # Используем встроенный webhook сервер с кастомным Tornado app
     application.run_webhook(
         listen="0.0.0.0",
         port=PORT,
         url_path="telegram",
         webhook_url=f"{WEBHOOK_URL}/telegram",
         drop_pending_updates=True,
+        webhook_app=tornado_app,
     )
 
 
