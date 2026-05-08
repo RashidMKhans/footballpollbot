@@ -189,16 +189,16 @@ async def post_init(application: Application) -> None:
     await application.bot.set_my_commands(commands)
     logger.info("✅ Команды бота установлены")
 
-    # Добавляем задачу: каждую среду в 11:00
+    # Добавляем задачу: каждую среду в 10:30
     job_queue = application.job_queue
     job_queue.run_daily(
         send_poll,
-        time=time(hour=11, minute=0, second=0, tzinfo=TIMEZONE),
+        time=time(hour=10, minute=30, second=0, tzinfo=TIMEZONE),
         days=(2,),  # среда
         name='weekly_poll'
     )
 
-    logger.info("✅ Расписание настроено: опросы будут отправляться каждую среду в 11:00 (UTC+5)")
+    logger.info("✅ Расписание настроено: опросы будут отправляться каждую среду в 10:30 (UTC+5)")
 
 
 # Flask routes
