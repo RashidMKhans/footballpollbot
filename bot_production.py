@@ -234,6 +234,43 @@ def webhook():
         return "error", 500
 
 
+@app.route('/trigger-poll', methods=['GET', 'POST'])
+def trigger_poll():
+    """
+    Endpoint для внешнего cron-сервиса.
+    Отправляет опрос в группу.
+    Используйте этот URL в cron-job.org каждую среду в 10:30 UTC+5 (04:30 UTC)
+    """
+    global bot_application, bot_loop
+    try:
+        if not bot_application or not bot_loop:
+            logger.error("Бот не инициализирован")
+            return "Bot not initialized", 500
+
+        # Создаем фиктивный контекст для отправки опроса
+        class FakeContext:
+            def __init__(self, bot):
+                self.bot = bot
+
+        context = FakeContext(bot_application.bot)
+
+        # Запускаем отправку опроса в event loop бота
+        future = asyncio.run_coroutine_threadsafe(
+            send_poll(context),
+            bot_loop
+        )
+
+        # Ждем завершения (максимум 30 секунд)
+        future.result(timeout=30)
+
+        logger.info("✅ Опрос отправлен через /trigger-poll endpoint")
+        return "Poll sent successfully!", 200
+
+    except Exception as e:
+        logger.error(f"Ошибка при отправке опроса через /trigger-poll: {e}")
+        return f"Error: {str(e)}", 500
+
+
 async def init_bot():
     """Инициализация бота"""
     global bot_application, bot_loop
