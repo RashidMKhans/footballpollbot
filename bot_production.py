@@ -123,12 +123,12 @@ async def test_poll_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         # Отправка списка игроков
         player_list = """Жұма 20:30 футбол НИШ
         
-FC
-1.
-2.
-3.
-4.
-5.
+FC Доп тепкіштер ⚽️
+1. Кудри
+2. Алинур
+3. Шах
+4. Сакен
+5. Темир
 
 FC
 6.
@@ -137,12 +137,13 @@ FC
 9.
 10.
 
-FC
-11.
-12.
-13.
-14.
-15."""
+FC Белый Рюдигер
+11. Али 
+12. Мади
+13. Нуржан
+14. Дима
+15. Ансар 
+"""
 
         await update.message.reply_text(player_list)
 
