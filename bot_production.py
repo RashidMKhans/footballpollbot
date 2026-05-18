@@ -83,6 +83,7 @@ FC Белый Рюдигер
 13. Нуржан
 14. Дима
 15. Ансар 
+16. Диса 
 """
 
         await context.bot.send_message(
@@ -142,7 +143,8 @@ FC Белый Рюдигер
 12. Мади
 13. Нуржан
 14. Дима
-15. Ансар 
+15. Ансар
+16. Диса 
 """
 
         await update.message.reply_text(player_list)
